@@ -37,10 +37,10 @@ pixels near the edges of buckets are missing some pixels when getting blurred. C
 imagePath = 'images/'
 tiltPath = 'imagesTilt'
 
+displayScale = 2.5
 
 
-
-def showImage(image, title='image'):
+def showImage(image, title='image', resize=False):
     cv2.imshow(title,image)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
@@ -57,11 +57,20 @@ Arguments:
 Returns:
     tiltShiftImage (numpy array as image) : simulated tilt shift image
 '''
-def tiltShift(image, center=None):
+def tiltShift(image, center=None, topRow=None, bottomRow=None):
+    print(topRow)
+    print(bottomRow)
+    if topRow is not None:
+        topRow = int(topRow * displayScale)
+    if bottomRow is not None:
+        bottomRow = int(bottomRow * displayScale)
     kernelStep = 2
 
     rows, cols, channels = image.shape
     #print(image.shape)
+    
+    
+
     if center is None:
         center = int(rows/2)
     
@@ -71,15 +80,21 @@ def tiltShift(image, center=None):
     buckets = 100
     rowBuckets = int((rows / ((buckets * 2) + 1)) / 2) # total number of buckets: buckets * 2 + 1
 
-    middle = image[center-rowBuckets:center+rowBuckets,:]
+    if topRow is None:
+        topRow = center
+    if bottomRow is None:
+        bottomRow = center
+
+    middle = image[topRow-rowBuckets:bottomRow+rowBuckets,:]
+
     
     # iterate from center until we reach an edge in both directions
     outImage = np.zeros(image.shape)
-    outImage[center-rowBuckets:center+rowBuckets,:] = middle
+    outImage[topRow-rowBuckets:bottomRow+rowBuckets,:] = middle
     #showImage(middle)
 
     # iterate towards 0
-    midRow = center - (2*rowBuckets)
+    midRow = topRow - (2*rowBuckets)
     startRow = max(0,midRow-rowBuckets)
     endRow = midRow + rowBuckets
     kernel = (5,5)
@@ -111,7 +126,7 @@ def tiltShift(image, center=None):
 
 
     # iterate towards end
-    midRow = center + (2*rowBuckets)
+    midRow = bottomRow + (2*rowBuckets)
     startRow = midRow - rowBuckets
     endRow = min(midRow+rowBuckets, rows)
     #print(endRow)
@@ -144,13 +159,62 @@ def tiltShift(image, center=None):
 
     return outImage
 
+# initialize the list of reference points and boolean indicating
+# whether cropping is being performed or not
+
+topRow = None
+bottomRow = None
+
+
 def getCenter(image):
+    refPt = []
+    cropping = False
+
+
+    
+    rows, cols, channels = image.shape
+    resize = (int(cols/displayScale), int(rows/displayScale))
+    resizeImage = cv2.resize(image, resize)
+    displayImage = resizeImage.copy()
+
+    def click_and_crop(event, x, y, flags, param):
+        global topRow, bottomRow
+        # grab references to the global variables
+        #global refPt, cropping
+        # if the left mouse button was clicked, record the starting
+        # (x, y) coordinates and indicate that cropping is being
+        # performed
+        if event == cv2.EVENT_MOUSEMOVE:
+            resizeImage = displayImage.copy()
+            #print((x,y))
+            cv2.line(resizeImage, (0,y), (cols,y), (255,0,0))
+            #topRow = y
+        if event == cv2.EVENT_LBUTTONDOWN:
+            #refPt = [(x, y)]
+            
+            topRow = y
+            print('set top row',(x,y))
+            #cropping = True
+        # check to see if the left mouse button was released
+        if event == cv2.EVENT_RBUTTONDOWN:
+            bottomRow = y
+            print('set bottom row',(x,y))
+        # elif event == cv2.EVENT_LBUTTONUP:
+        #     # record the ending (x, y) coordinates and indicate that
+        #     # the cropping operation is finished
+        #     refPt.append((x, y))
+        #     cropping = False
+        #     # draw a rectangle around the region of interest
+        #     cv2.rectangle(image, refPt[0], refPt[1], (0, 255, 0), 2)
+        #     cv2.imshow("image", image)
+
+    
     cv2.namedWindow("image")
     cv2.setMouseCallback("image", click_and_crop)
     # keep looping until the 'q' key is pressed
     while True:
         # display the image and wait for a keypress
-        cv2.imshow("image", image)
+        cv2.imshow("image", resizeImage)
         key = cv2.waitKey(1) & 0xFF
         # if the 'r' key is pressed, reset the cropping region
         if key == ord("r"):
@@ -158,16 +222,7 @@ def getCenter(image):
         # if the 'c' key is pressed, break from the loop
         elif key == ord("c"):
             break
-    # if there are two reference points, then crop the region of interest
-    # from teh image and display it
-    if len(refPt) == 2:
-        roi = clone[refPt[0][1]:refPt[1][1], refPt[0][0]:refPt[1][0]]
-        cv2.imshow("ROI", roi)
-        cv2.waitKey(0)
-    # close all open windows
-    cv2.destroyAllWindows()
-
-    return roi
+    #return topRow, bottomRow
 def main():
 
     if not os.path.isdir(tiltPath):
@@ -176,8 +231,9 @@ def main():
         readPath = os.path.join(imagePath, path)
         print(readPath)
         image = cv2.imread(readPath)
+        getCenter(image)
 
-        tiltImage = tiltShift(image)
+        tiltImage = tiltShift(image, topRow=topRow, bottomRow=bottomRow)
         writePath = os.path.join(tiltPath, path)
         cv2.imwrite(writePath, tiltImage)
 
