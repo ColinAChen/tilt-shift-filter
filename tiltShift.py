@@ -89,7 +89,7 @@ def tiltShift(image, center=None):
     blurImage = cv2.GaussianBlur(image[startRow-kernel[0]:endRow+kernel[0],:], kernel,0)
     outImage[startRow:endRow,:] = blurImage[kernel[0]:kernel[0]+(2*rowBuckets),:]
     while (endRow > 0):
-        print(startRow)
+        #print(startRow)
         # find the middle row of the current bucket
         midRow = midRow - (2*rowBuckets)
         startRow = max(0,midRow-rowBuckets)
@@ -101,6 +101,8 @@ def tiltShift(image, center=None):
         kernel = (kernel[0] + kernelStep, kernel[0] + kernelStep)
         #print(kernel)
         #showImage(image[startRow:endRow,:])
+
+        # all this noise to handle the last bucket which might not have the same nnumber of rows
         startCrop = max(0, startRow-kernel[0])
         endCrop = endRow + kernel[0]
         startDiff = startRow-startCrop
@@ -114,8 +116,8 @@ def tiltShift(image, center=None):
     endRow = min(midRow+rowBuckets, rows)
     #print(endRow)
     kernel = (5,5)
-    blurImage = cv2.GaussianBlur(image[startRow:endRow,:], kernel,0)
-    outImage[startRow:endRow,:] = blurImage
+    blurImage = cv2.GaussianBlur(image[startRow-kernel[0]:endRow+kernel[0],:], kernel,0)
+    outImage[startRow:endRow,:] = blurImage[kernel[0]:kernel[0]+(2*rowBuckets),:]
     while (endRow < rows):
         midRow = midRow + (2*rowBuckets)
         startRow = midRow - rowBuckets
@@ -126,8 +128,11 @@ def tiltShift(image, center=None):
 
         kernel = (kernel[0] + kernelStep, kernel[0] + kernelStep)
 
-        blurImage = cv2.GaussianBlur(image[startRow:endRow,:], kernel ,0)
-        outImage[startRow:endRow,:] = blurImage
+        startCrop = startRow-kernel[0]
+        endCrop = min(endRow+kernel[0],rows)
+        endDiff = endCrop - endRow
+        blurImage = cv2.GaussianBlur(image[startCrop:endCrop,:], kernel ,0)
+        outImage[startRow:endRow,:] = blurImage[kernel[0]:len(blurImage) - endDiff,:]
 
     # decide on number of blur buckets
 
